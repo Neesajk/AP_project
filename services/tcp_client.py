@@ -1,13 +1,12 @@
 """TCP client service for receiving EMG signal data."""
+
 import socket
+
 import numpy as np
 
-class TcpClient:
-    """Manage the TCP connection and received signal data.
 
-    The real socket and receiving loop will be added in a later step.
-    Keeping them here prevents networking code from entering the ViewModel.
-    """
+class TcpClient:
+    """Manage the TCP connection and received signal data."""
 
     CHANNEL_COUNT = 32
     SAMPLES_PER_PACKET = 18
@@ -24,9 +23,13 @@ class TcpClient:
         if self.is_connected:
             return "Already connected. Please disconnect first."
 
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((host, port))
-        self.socket.setblocking(False)
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.connect((host, port))
+            self.socket.setblocking(False)
+        except OSError as exc:
+            self._close_socket()
+            return f"Connection failed: {exc}"
 
         self.is_connected = True
         return f"Connected to {host}:{port}."
@@ -35,7 +38,11 @@ class TcpClient:
         """Close the TCP connection."""
         self.is_connected = False
         self.byte_buffer.clear()
+        self._close_socket()
+        return "Disconnected."
 
+    def _close_socket(self) -> None:
+        """Close the socket without changing buffered packet bytes."""
         if self.socket:
             try:
                 self.socket.close()
@@ -43,19 +50,25 @@ class TcpClient:
                 pass
             self.socket = None
 
-        return "Disconnected."
-
     def receive_data(self, signal_buffer) -> str:
         """Receive all currently available TCP bytes and process complete packets."""
         if not self.is_connected or self.socket is None:
             return "Not connected to a TCP server."
 
-        received_bytes, error = self._receive_bytes()
+        received_bytes, error, connection_closed = self._receive_bytes()
+        packet_result = self._process_packet_buffer(signal_buffer)
+
+        if connection_closed:
+            self.byte_buffer.clear()
+            if error:
+                return error
+            if packet_result:
+                return f"{packet_result} Connection closed by server."
+            return "Connection closed by server."
+
         if error:
             return error
-
-        packet_result = self._process_packet_buffer(signal_buffer)
-        if packet_result is not None:
+        if packet_result:
             return packet_result
 
         if received_bytes == 0:
@@ -63,21 +76,24 @@ class TcpClient:
 
         return "Waiting for more data to form a complete packet."
 
-    def _receive_bytes(self) -> tuple[int, str | None]:
+    def _receive_bytes(self) -> tuple[int, str | None, bool]:
         """Read all currently available bytes from the non-blocking socket."""
         received_bytes = 0
         try:
             while True:
                 chunk = self.socket.recv(4096)
                 if not chunk:
-                    return 0, self.disconnect_from_server()
+                    self.is_connected = False
+                    self._close_socket()
+                    return received_bytes, None, True
                 self.byte_buffer.extend(chunk)
                 received_bytes += len(chunk)
         except BlockingIOError:
-            return received_bytes, None
-        except (OSError, socket.error) as exc:
-            self.disconnect_from_server()
-            return 0, f"TCP receive error: {exc}"
+            return received_bytes, None, False
+        except OSError as exc:
+            self.is_connected = False
+            self._close_socket()
+            return received_bytes, f"TCP receive error: {exc}", True
 
     def _process_packet_buffer(self, signal_buffer) -> str | None:
         """Decode and append all complete packets currently in the byte buffer."""

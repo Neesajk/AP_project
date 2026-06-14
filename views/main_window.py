@@ -1,5 +1,6 @@
 """Main window for the EMG signal application."""
 
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
@@ -63,3 +64,14 @@ class MainWindow(QMainWindow):
 
         # The ViewModel updates the visible status without knowing GUI details.
         self.viewmodel.status_changed.connect(self.status_label.setText)
+        self.viewmodel.connection_changed.connect(
+            self.connection_view.set_connected
+        )
+        self.viewmodel.signal_data_changed.connect(
+            self.plot_view.update_signal
+        )
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Release application resources before closing the window."""
+        self.viewmodel.shutdown()
+        super().closeEvent(event)
