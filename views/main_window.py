@@ -1,0 +1,65 @@
+"""Main window for the EMG signal application."""
+
+from PySide6.QtWidgets import (
+    QLabel,
+    QMainWindow,
+    QVBoxLayout,
+    QWidget,
+)
+
+from viewmodels.main_viewmodel import MainViewModel
+from views.connection_view import ConnectionView
+from views.plot_view import PlotView
+from views.signal_controls_view import SignalControlsView
+
+
+class MainWindow(QMainWindow):
+    """Display the basic controls needed by the application."""
+
+    def __init__(self, viewmodel: MainViewModel):
+        super().__init__()
+        self.viewmodel = viewmodel
+
+        self.setWindowTitle("EMG Signal Viewer")
+        self.resize(900, 600)
+
+        self.connection_view = ConnectionView()
+        self.signal_controls_view = SignalControlsView()
+        self.plot_view = PlotView()
+        self.status_label = QLabel("Not connected")
+
+        self._build_layout()
+        self._connect_signals()
+
+    def _build_layout(self) -> None:
+        """Arrange the smaller views inside the main window."""
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(self.connection_view)
+        main_layout.addWidget(self.signal_controls_view)
+        main_layout.addWidget(self.plot_view)
+        main_layout.addWidget(self.status_label)
+
+        central_widget = QWidget()
+        central_widget.setLayout(main_layout)
+        self.setCentralWidget(central_widget)
+
+    def _connect_signals(self) -> None:
+        """Connect signals from the smaller views to the ViewModel."""
+        self.connection_view.connect_requested.connect(
+            self.viewmodel.connect_to_server
+        )
+        self.connection_view.disconnect_requested.connect(
+            self.viewmodel.disconnect_from_server
+        )
+        self.signal_controls_view.channel_changed.connect(
+            self.viewmodel.select_channel
+        )
+        self.signal_controls_view.mode_changed.connect(
+            self.viewmodel.select_signal_mode
+        )
+        self.signal_controls_view.plot_all_requested.connect(
+            self.viewmodel.plot_all_channels
+        )
+
+        # The ViewModel updates the visible status without knowing GUI details.
+        self.viewmodel.status_changed.connect(self.status_label.setText)
