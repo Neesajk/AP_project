@@ -29,6 +29,7 @@ class ConnectionView(QWidget):
 
         self.connect_button = QPushButton("Connect")
         self.disconnect_button = QPushButton("Disconnect")
+        self.disconnect_button.setEnabled(False)
 
         form_layout = QFormLayout()
         form_layout.addRow("Host:", self.host_input)
@@ -51,3 +52,10 @@ class ConnectionView(QWidget):
             self.host_input.text().strip(),
             self.port_input.value(),
         )
+
+    def set_connected(self, connected: bool) -> None:
+        """Update controls to reflect the current connection state."""
+        self.host_input.setEnabled(not connected)
+        self.port_input.setEnabled(not connected)
+        self.connect_button.setEnabled(not connected)
+        self.disconnect_button.setEnabled(connected)
