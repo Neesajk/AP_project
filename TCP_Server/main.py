@@ -8,7 +8,7 @@ from pathlib import Path
 
 class EMGTCPServer:
     def __init__(self, host='localhost', port=12345,
-                 pkl_file='D:\\Germany\\P-Matrix\\realtime-emg-dsp\\data\\recording.pkl'):
+                 pkl_file='./data/recording.pkl'):
         self.host = host
         self.port = port
         self.pkl_file = pkl_file
