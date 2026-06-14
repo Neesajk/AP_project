@@ -71,7 +71,8 @@ class SignalBuffer:
     def get_window(self, channel_index: int) -> tuple[np.ndarray, np.ndarray]:
         """Return the time axis and data for one selected channel."""
         y = self.get_channel(channel_index)
-        x = np.arange(y.shape[0]) / self.sampling_rate
+        first_sample = self.total_samples_received - y.shape[0]
+        x = (first_sample + np.arange(y.shape[0])) / self.sampling_rate
         return x, y
 
     def get_signal_time_seconds(self) -> float:
