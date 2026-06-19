@@ -1,5 +1,6 @@
+import numpy as np
 from PySide6.QtCore import QObject, QTimer, Signal
-
+from models.signal_processing import process_signal
 from models.signal_buffer import SignalBuffer
 from services.tcp_client import TcpClient
 
@@ -10,6 +11,7 @@ class MainViewModel(QObject):
     status_changed = Signal(str)
     connection_changed = Signal(bool)
     signal_data_changed = Signal(object, object, int, str)
+    all_signal_data_changed = Signal(object, object, str)
 
     def __init__(
         self,
@@ -21,6 +23,7 @@ class MainViewModel(QObject):
         self.tcp_client = tcp_client
         self.selected_channel = 0
         self.signal_mode = "Original"
+        self.plot_all_mode = False
 
         self.receive_timer = QTimer(self)
         self.receive_timer.setInterval(10)
@@ -52,16 +55,22 @@ class MainViewModel(QObject):
         self.selected_channel = channel_number - 1
         self.status_changed.emit(f"Selected channel {channel_number}.")
         self._emit_selected_signal()
+        self.plot_all_mode = False
 
     def select_signal_mode(self, mode: str) -> None:
         """Store the selected signal processing mode."""
         self.signal_mode = mode
         self.status_changed.emit(f"Signal mode: {mode}.")
-        self._emit_selected_signal()
+
+        if self.plot_all_mode:
+            self.plot_all_channels()
+        else:
+            self._emit_selected_signal()
 
     def plot_all_channels(self) -> None:
-        """Handle the overview request until plotting is implemented."""
-        self.status_changed.emit("All-channel plotting comes in a later step.")
+        """Enable all-channel live plotting and publish all processed channels."""
+        self.plot_all_mode = True
+        self._emit_all_signals()
 
     def shutdown(self) -> None:
         """Stop receiving data and release the TCP connection."""
@@ -79,22 +88,75 @@ class MainViewModel(QObject):
 
         if has_new_samples:
             self.status_changed.emit(message)
-            self._emit_selected_signal()
 
-        if not self.tcp_client.is_connected:
-            self.receive_timer.stop()
-            self.connection_changed.emit(False)
-            self.status_changed.emit(message)
+            if self.plot_all_mode:
+                self._emit_all_signals()
+            else:
+                self._emit_selected_signal()
+                if not self.tcp_client.is_connected:
+                    self.receive_timer.stop()
+                    self.connection_changed.emit(False)
+                    self.status_changed.emit(message)
 
     def _emit_selected_signal(self) -> None:
-        """Publish the selected channel's current model window."""
+        """Publish the selected channel's current processed signal window."""
         if not self.signal_buffer.has_data():
             return
 
-        x, y = self.signal_buffer.get_window(self.selected_channel)
-        self.signal_data_changed.emit(
-            x,
-            y,
-            self.selected_channel + 1,
-            self.signal_mode,
+        try:
+            x, y = self.signal_buffer.get_window(self.selected_channel)
+
+            processed_y = process_signal(
+                y,
+                self.signal_mode,
+                self.signal_buffer.sampling_rate,
+            )
+
+            self.signal_data_changed.emit(
+                x,
+                processed_y,
+                self.selected_channel + 1,
+                self.signal_mode,
+            )
+
+        except ValueError as error:
+            self.status_changed.emit(str(error))
+
+    def _get_current_time_axis(self, number_of_samples: int):
+        """Return the time axis for the current rolling buffer."""
+        first_sample = (
+            self.signal_buffer.total_samples_received - number_of_samples
         )
+        return (
+            first_sample + np.arange(number_of_samples)
+        ) / self.signal_buffer.sampling_rate
+    
+    def _emit_all_signals(self) -> None:
+        """Publish all channels for live all-channel plotting."""
+        if not self.signal_buffer.has_data():
+            self.status_changed.emit("No signal data available for all-channel plot.")
+            return
+
+        try:
+            data = self.signal_buffer.get_data()
+
+            processed_data = process_signal(
+                data,
+                self.signal_mode,
+                self.signal_buffer.sampling_rate,
+            )
+
+            x = self._get_current_time_axis(processed_data.shape[1])
+
+            self.all_signal_data_changed.emit(
+                x,
+                processed_data,
+                self.signal_mode,
+            )
+
+            self.status_changed.emit(
+                f"Showing all 32 channels in {self.signal_mode} mode."
+            )
+
+        except ValueError as error:
+            self.status_changed.emit(str(error))

@@ -70,6 +70,9 @@ class MainWindow(QMainWindow):
         self.viewmodel.signal_data_changed.connect(
             self.plot_view.update_signal
         )
+        self.viewmodel.all_signal_data_changed.connect(
+            self.plot_view.update_all_signals
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Release application resources before closing the window."""

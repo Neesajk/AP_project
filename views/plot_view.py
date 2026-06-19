@@ -99,7 +99,7 @@ class PlotView(QWidget):
         positions = np.column_stack((x, y)).astype(np.float32, copy=False)
         self.line.set_data(pos=positions)
 
-        displayed_mode = mode if mode == "Original" else f"{mode} (raw preview)"
+        displayed_mode = mode
         self.title_label.setText(
             f"Channel {channel_number} - {displayed_mode}"
         )
@@ -132,3 +132,77 @@ class PlotView(QWidget):
             y=(y_min - y_padding, y_max + y_padding),
             margin=0,
         )
+
+    def update_all_signals(
+        self,
+        x: np.ndarray,
+        data: np.ndarray,
+        mode: str,
+    ) -> None:
+        """Update the plot with all channels using vertical offsets."""
+        x = np.asarray(x, dtype=np.float64)
+        data = np.asarray(data, dtype=np.float64)
+
+        if data.ndim != 2 or data.shape[0] == 0:
+            self.clear()
+            return
+
+        valid_x = np.isfinite(x)
+        if not np.any(valid_x):
+            self.clear()
+            return
+
+        x = x[valid_x]
+        data = data[:, valid_x]
+
+        channel_range = np.nanmax(data) - np.nanmin(data)
+        if not np.isfinite(channel_range) or channel_range == 0:
+            channel_range = 1.0
+
+        offset_step = channel_range * 1.5
+
+        combined_positions = []
+        combined_connect = []
+
+        for channel_index in range(data.shape[0]):
+            y = data[channel_index]
+            valid_y = np.isfinite(y)
+
+            if not np.any(valid_y):
+                continue
+
+            channel_x = x[valid_y]
+            channel_y = y[valid_y] + channel_index * offset_step
+
+            positions = np.column_stack((channel_x, channel_y)).astype(
+                np.float32,
+                copy=False,
+            )
+
+            combined_positions.append(positions)
+
+            connect = np.ones(len(positions), dtype=bool)
+            connect[-1] = False
+            combined_connect.append(connect)
+
+        if len(combined_positions) == 0:
+            self.clear()
+            return
+
+        positions = np.concatenate(combined_positions, axis=0)
+        connect = np.concatenate(combined_connect, axis=0)
+
+        self.line.set_data(
+            pos=positions,
+            connect=connect,
+        )
+
+        self.title_label.setText(f"All 32 Channels - {mode}")
+
+        self.view.camera.set_range(
+            x=(float(x.min()), float(x.max())),
+            y=(float(positions[:, 1].min()), float(positions[:, 1].max())),
+            margin=0.03,
+        )
+
+        self.canvas.update()
