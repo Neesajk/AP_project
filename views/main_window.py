@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 
 from viewmodels.main_viewmodel import MainViewModel
 from views.connection_view import ConnectionView
+from views.offline_plot_view import OfflinePlotView  # NEW: Team Member 3
 from views.plot_view import PlotView
 from views.signal_controls_view import SignalControlsView
 
@@ -28,6 +29,7 @@ class MainWindow(QMainWindow):
         self.signal_controls_view = SignalControlsView()
         self.plot_view = PlotView()
         self.status_label = QLabel("Not connected")
+        self.offline_plot_view = None  # NEW: Team Member 3
 
         self._build_layout()
         self._connect_signals()
@@ -61,6 +63,10 @@ class MainWindow(QMainWindow):
         self.signal_controls_view.plot_all_requested.connect(
             self.viewmodel.plot_all_channels
         )
+        # NEW: Team Member 3 - Offline View
+        self.signal_controls_view.offline_view_requested.connect(
+            self._open_offline_view
+        )
 
         # The ViewModel updates the visible status without knowing GUI details.
         self.viewmodel.status_changed.connect(self.status_label.setText)
@@ -70,6 +76,21 @@ class MainWindow(QMainWindow):
         self.viewmodel.signal_data_changed.connect(
             self.plot_view.update_signal
         )
+
+    def _open_offline_view(self) -> None:
+        """NEW: Team Member 3 - Open offline inspection window."""
+        if self.offline_plot_view is None:
+            self.offline_plot_view = OfflinePlotView()
+            self.offline_plot_view.set_viewmodel(self.viewmodel)
+            self.offline_plot_view.closed.connect(self._on_offline_closed)
+
+        self.offline_plot_view.show()
+        self.offline_plot_view.raise_()
+        self.offline_plot_view.activateWindow()
+
+    def _on_offline_closed(self) -> None:
+        """NEW: Team Member 3 - Cleanup when offline window closes."""
+        self.offline_plot_view = None
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Release application resources before closing the window."""

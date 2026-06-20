@@ -4,3 +4,8 @@ __pycache__/
 .idea/
 .vscode/
 tests/
+.DS_Store
+*.log
+.env
+*.sqlite3
+*.db

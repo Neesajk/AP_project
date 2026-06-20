@@ -1,6 +1,9 @@
 from PySide6.QtCore import QObject, QTimer, Signal
 
+import numpy as np
+
 from models.signal_buffer import SignalBuffer
+from models.signal_processor import process_offline_signal
 from services.tcp_client import TcpClient
 
 
@@ -68,6 +71,53 @@ class MainViewModel(QObject):
         self.receive_timer.stop()
         if self.tcp_client.is_connected:
             self.tcp_client.disconnect_from_server()
+
+    def get_offline_signal(
+        self,
+        channel_number: int,
+        mode: str,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Get processed signal data for offline inspection.
+        
+        Args:
+            channel_number: 1-based channel index (1-32)
+            mode: "Original", "RMS", or "Filtered"
+        
+        Returns:
+            Tuple of (time_array, signal_array) both as numpy arrays
+        
+        Raises:
+            ValueError: If buffer empty, channel invalid, or mode unknown
+        """
+        # Check if buffer has data
+        if not self.signal_buffer.has_data():
+            raise ValueError("No recorded data available.")
+        
+        # Validate channel
+        if not 1 <= channel_number <= 32:
+            raise ValueError(f"Invalid channel: {channel_number}. Must be 1-32.")
+        
+        # Convert to zero-based index
+        channel_idx = channel_number - 1
+        
+        # Get raw data from buffer
+        try:
+            x, y = self.signal_buffer.get_window(channel_idx)
+        except (IndexError, ValueError) as e:
+            raise ValueError(f"Cannot get channel data: {e}")
+        
+        # Apply signal processing
+        try:
+            y_processed = process_offline_signal(y, mode)
+        except ValueError as e:
+            raise ValueError(f"Signal processing failed: {e}")
+        
+        # Ensure no empty data
+        if len(x) == 0 or len(y_processed) == 0:
+            raise ValueError("Signal data is empty.")
+        
+        return x, y_processed
 
     def _receive_data(self) -> None:
         """Poll the TCP service and publish newly buffered model data."""
