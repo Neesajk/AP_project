@@ -96,7 +96,7 @@ class MainViewModel(QObject):
             f"Selected channel {channel_number}."
         )
 
-        self._emit_selected_signal()
+        self._update_plot()
 
     def select_signal_mode(self, mode: str) -> None:
         """Store the selected signal-processing mode."""
@@ -119,7 +119,14 @@ class MainViewModel(QObject):
     def plot_all_channels(self) -> None:
         """Enable all-channel live plotting."""
         self.plot_all_mode = True
-        self._emit_all_signals()
+
+        if not self.signal_buffer.has_data():
+            self.status_changed.emit(
+                "No signal data available for all-channel plot."
+            )
+            return
+
+        self._update_plot()
 
     def shutdown(self) -> None:
         """Stop receiving data and release the TCP connection."""
@@ -235,10 +242,38 @@ class MainViewModel(QObject):
         if not self.signal_buffer.has_data():
             return
 
+        data = self._get_display_data()
+
+        if data is None or data.shape[-1] == 0:
+            self.status_changed.emit(
+                f"Waiting for enough samples to display "
+                f"{self.signal_mode} data."
+            )
+            return
+
+        x = self._get_current_time_axis(data.shape[-1])
+
         if self.plot_all_mode:
-            self._emit_all_signals()
-        else:
-            self._emit_selected_signal()
+            self.all_signal_data_changed.emit(
+                x,
+                data,
+                self.signal_mode,
+            )
+            return
+
+        if self.selected_channel >= data.shape[0]:
+            self.status_changed.emit(
+                f"Channel {self.selected_channel + 1} "
+                "is not available."
+            )
+            return
+
+        self.signal_data_changed.emit(
+            x,
+            data[self.selected_channel],
+            self.selected_channel + 1,
+            self.signal_mode,
+        )
 
     def _get_display_data(self) -> np.ndarray | None:
         """Return the rolling data for the currently selected mode."""
@@ -248,73 +283,6 @@ class MainViewModel(QObject):
             return self.signal_buffer.get_data()
 
         return self._processed_buffers.get(mode)
-
-    def _emit_selected_signal(self) -> None:
-        """Publish the selected channel's current signal window."""
-        if not self.signal_buffer.has_data():
-            return
-
-        try:
-            data = self._get_display_data()
-
-            if data is None or data.shape[-1] == 0:
-                self.status_changed.emit(
-                    f"Waiting for enough samples to display "
-                    f"{self.signal_mode} data."
-                )
-                return
-
-            if self.selected_channel >= data.shape[0]:
-                raise ValueError(
-                    f"Channel {self.selected_channel + 1} "
-                    "is not available."
-                )
-
-            channel_data = data[self.selected_channel]
-            x = self._get_current_time_axis(
-                channel_data.shape[-1]
-            )
-
-            self.signal_data_changed.emit(
-                x,
-                channel_data,
-                self.selected_channel + 1,
-                self.signal_mode,
-            )
-
-        except ValueError as error:
-            self.status_changed.emit(str(error))
-
-    def _emit_all_signals(self) -> None:
-        """Publish all channels using already processed rolling data."""
-        if not self.signal_buffer.has_data():
-            self.status_changed.emit(
-                "No signal data available for all-channel plot."
-            )
-            return
-
-        try:
-            data = self._get_display_data()
-
-            if data is None or data.shape[-1] == 0:
-                self.status_changed.emit(
-                    f"Waiting for enough samples to display "
-                    f"{self.signal_mode} data."
-                )
-                return
-
-            x = self._get_current_time_axis(
-                data.shape[-1]
-            )
-
-            self.all_signal_data_changed.emit(
-                x,
-                data,
-                self.signal_mode,
-            )
-
-        except ValueError as error:
-            self.status_changed.emit(str(error))
 
     def _get_current_time_axis(
         self,
