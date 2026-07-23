@@ -117,7 +117,9 @@ class TcpClient:
             return f"Received {packets_processed} packet(s)."
         return None
 
-    def _decode_packet(self, packet_bytes: bytes) -> tuple[np.ndarray | None, str | None]:
+    def _decode_packet(
+        self, packet_bytes: bytes
+    ) -> tuple[np.ndarray | None, str | None]:
         """Decode a raw packet into a (channels, samples) NumPy array."""
         try:
             packet_array = np.frombuffer(packet_bytes, dtype=np.float64)

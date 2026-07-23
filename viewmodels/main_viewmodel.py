@@ -92,9 +92,7 @@ class MainViewModel(QObject):
         self.selected_channel = channel_number - 1
         self.plot_all_mode = False
 
-        self.status_changed.emit(
-            f"Selected channel {channel_number}."
-        )
+        self.status_changed.emit(f"Selected channel {channel_number}.")
 
         self._update_plot()
 
@@ -103,16 +101,12 @@ class MainViewModel(QObject):
         normalized_mode = mode.lower()
 
         if normalized_mode not in {"original", "filtered", "rms"}:
-            self.status_changed.emit(
-                f"Invalid signal mode: {mode}"
-            )
+            self.status_changed.emit(f"Invalid signal mode: {mode}")
             return
 
         self.signal_mode = mode
 
-        self.status_changed.emit(
-            f"Signal mode: {mode}."
-        )
+        self.status_changed.emit(f"Signal mode: {mode}.")
 
         self._update_plot()
 
@@ -121,9 +115,7 @@ class MainViewModel(QObject):
         self.plot_all_mode = True
 
         if not self.signal_buffer.has_data():
-            self.status_changed.emit(
-                "No signal data available for all-channel plot."
-            )
+            self.status_changed.emit("No signal data available for all-channel plot.")
             return
 
         self._update_plot()
@@ -140,9 +132,7 @@ class MainViewModel(QObject):
         """Poll the TCP service and process only newly received samples."""
         samples_before = self.signal_buffer.total_samples_received
 
-        message = self.tcp_client.receive_data(
-            self.signal_buffer
-        )
+        message = self.tcp_client.receive_data(self.signal_buffer)
 
         samples_after = self.signal_buffer.total_samples_received
         has_new_samples = samples_after > samples_before
@@ -170,8 +160,7 @@ class MainViewModel(QObject):
     def _process_new_samples(self) -> None:
         """Process only samples not previously passed to the live processor."""
         new_sample_count = (
-            self.signal_buffer.total_samples_received
-            - self._last_processed_sample
+            self.signal_buffer.total_samples_received - self._last_processed_sample
         )
 
         if new_sample_count <= 0:
@@ -187,9 +176,7 @@ class MainViewModel(QObject):
         new_data = self.signal_buffer.get_latest(new_sample_count)
 
         try:
-            processed = self.signal_processor.process_chunk(
-                new_data
-            )
+            processed = self.signal_processor.process_chunk(new_data)
         except ValueError as error:
             self.status_changed.emit(str(error))
             return
@@ -204,9 +191,7 @@ class MainViewModel(QObject):
             new_data=processed["rms"],
         )
 
-        self._last_processed_sample = (
-            self.signal_buffer.total_samples_received
-        )
+        self._last_processed_sample = self.signal_buffer.total_samples_received
 
     def _append_processed_data(
         self,
@@ -230,10 +215,7 @@ class MainViewModel(QObject):
         maximum_samples = self.signal_buffer.sample_count
 
         if combined_data.shape[-1] > maximum_samples:
-            combined_data = combined_data[
-                ...,
-                -maximum_samples:
-            ]
+            combined_data = combined_data[..., -maximum_samples:]
 
         self._processed_buffers[mode] = combined_data
 
@@ -246,8 +228,7 @@ class MainViewModel(QObject):
 
         if data is None or data.shape[-1] == 0:
             self.status_changed.emit(
-                f"Waiting for enough samples to display "
-                f"{self.signal_mode} data."
+                f"Waiting for enough samples to display " f"{self.signal_mode} data."
             )
             return
 
@@ -263,8 +244,7 @@ class MainViewModel(QObject):
 
         if self.selected_channel >= data.shape[0]:
             self.status_changed.emit(
-                f"Channel {self.selected_channel + 1} "
-                "is not available."
+                f"Channel {self.selected_channel + 1} " "is not available."
             )
             return
 
@@ -289,10 +269,7 @@ class MainViewModel(QObject):
         number_of_samples: int,
     ) -> np.ndarray:
         """Return a time axis aligned with the latest received sample."""
-        first_sample = (
-            self.signal_buffer.total_samples_received
-            - number_of_samples
-        )
+        first_sample = self.signal_buffer.total_samples_received - number_of_samples
 
         return (
             first_sample + np.arange(number_of_samples)

@@ -15,8 +15,7 @@ class PlotView(QWidget):
         self.title_label = QLabel("Waiting for signal data")
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title_label.setStyleSheet(
-            "font-weight: 600; padding: 6px; color: #d1d5db; "
-            "background: #111827;"
+            "font-weight: 600; padding: 6px; color: #d1d5db; " "background: #111827;"
         )
 
         self.canvas = scene.SceneCanvas(
@@ -123,9 +122,7 @@ class PlotView(QWidget):
             connect="strip",
         )
 
-        self.title_label.setText(
-            f"Channel {channel_number} - {mode}"
-        )
+        self.title_label.setText(f"Channel {channel_number} - {mode}")
 
         self._fit_camera(x, y)
         self.canvas.update()
@@ -201,9 +198,7 @@ class PlotView(QWidget):
             self.clear()
             return
 
-        channel_range = float(
-            np.max(finite_data) - np.min(finite_data)
-        )
+        channel_range = float(np.max(finite_data) - np.min(finite_data))
 
         if not np.isfinite(channel_range) or channel_range == 0:
             channel_range = 1.0
@@ -221,13 +216,9 @@ class PlotView(QWidget):
                 continue
 
             channel_x = x[valid_y]
-            channel_y = (
-                y[valid_y] + channel_index * offset_step
-            )
+            channel_y = y[valid_y] + channel_index * offset_step
 
-            positions = np.column_stack(
-                (channel_x, channel_y)
-            ).astype(
+            positions = np.column_stack((channel_x, channel_y)).astype(
                 np.float32,
                 copy=False,
             )
@@ -261,9 +252,7 @@ class PlotView(QWidget):
 
         channel_count = data.shape[0]
 
-        self.title_label.setText(
-            f"All {channel_count} Channels - {mode}"
-        )
+        self.title_label.setText(f"All {channel_count} Channels - {mode}")
 
         self.view.camera.set_range(
             x=(
