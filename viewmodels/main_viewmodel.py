@@ -162,16 +162,6 @@ class MainViewModel(QObject):
 
     def _process_new_samples(self) -> None:
         """Process only samples not previously passed to the live processor."""
-        data = self.signal_buffer.get_data()
-
-        if data.ndim != 2:
-            self.status_changed.emit(
-                "Expected signal data with shape "
-                "(channels, samples)."
-            )
-            return
-
-        total_buffered_samples = data.shape[-1]
         new_sample_count = (
             self.signal_buffer.total_samples_received
             - self._last_processed_sample
@@ -184,10 +174,10 @@ class MainViewModel(QObject):
         # received, so never index farther back than its current length.
         new_sample_count = min(
             new_sample_count,
-            total_buffered_samples,
+            self.signal_buffer.sample_count,
         )
 
-        new_data = data[..., -new_sample_count:]
+        new_data = self.signal_buffer.get_latest(new_sample_count)
 
         try:
             processed = self.signal_processor.process_chunk(
@@ -230,7 +220,7 @@ class MainViewModel(QObject):
                 axis=-1,
             )
 
-        maximum_samples = self.signal_buffer.get_data().shape[-1]
+        maximum_samples = self.signal_buffer.sample_count
 
         if combined_data.shape[-1] > maximum_samples:
             combined_data = combined_data[
