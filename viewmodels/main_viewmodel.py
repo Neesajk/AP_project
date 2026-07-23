@@ -140,8 +140,16 @@ class MainViewModel(QObject):
         samples_after = self.signal_buffer.total_samples_received
         has_new_samples = samples_after > samples_before
 
-        if has_new_samples:
+        # Ignore normal polling messages, but still show errors.
+        idle_messages = (
+            "No new TCP bytes available right now.",
+            "Waiting for more data to form a complete packet.",
+        )
+
+        if has_new_samples or message not in idle_messages:
             self.status_changed.emit(message)
+
+        if has_new_samples:
             self._process_new_samples()
 
         # This must run regardless of whether new samples arrived and
@@ -151,7 +159,6 @@ class MainViewModel(QObject):
             self.plot_timer.stop()
 
             self.connection_changed.emit(False)
-            self.status_changed.emit(message)
 
     def _process_new_samples(self) -> None:
         """Process only samples not previously passed to the live processor."""
