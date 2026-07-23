@@ -170,8 +170,6 @@ class LiveSignalProcessor:
         order: int = 4,
         rms_window_ms: float = 100.0,
     ) -> None:
-        self.sampling_rate = sampling_rate
-
         self._b, self._a = _design_bandpass_filter(
             sampling_rate=sampling_rate,
             low_cut=low_cut,
@@ -214,8 +212,8 @@ class LiveSignalProcessor:
         """
         Process one newly received live-data chunk.
 
-        Returns original, filtered and RMS data. Filtered and RMS outputs may
-        initially be empty while their required history is being collected.
+        Filtered and RMS outputs may initially be empty while their required
+        history is being collected.
         """
         data = _validate_data(data)
 
@@ -233,7 +231,6 @@ class LiveSignalProcessor:
         rms_ready = self._process_rms_chunk(filtered_ready)
 
         return {
-            "original": data.copy(),
             "filtered": filtered_ready,
             "rms": rms_ready,
         }
