@@ -141,7 +141,7 @@ def compute_rms(
         mean_squared = np.convolve(squared, kernel, mode="same")
         return np.sqrt(np.maximum(mean_squared, 0.0))
 
-    for channel_index in np.ndindex(data.shape[:-1]):
+    for channel_index in range(data.shape[0]):
         mean_squared = np.convolve(
             squared[channel_index],
             kernel,
