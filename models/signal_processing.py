@@ -147,9 +147,7 @@ def compute_rms(
             kernel,
             mode="same",
         )
-        rms_data[channel_index] = np.sqrt(
-            np.maximum(mean_squared, 0.0)
-        )
+        rms_data[channel_index] = np.sqrt(np.maximum(mean_squared, 0.0))
 
     return rms_data
 
@@ -182,16 +180,13 @@ class LiveSignalProcessor:
             len(self._b),
         )
 
-        self._rms_window_size = int(
-            round((rms_window_ms / 1000.0) * sampling_rate)
-        )
+        self._rms_window_size = int(round((rms_window_ms / 1000.0) * sampling_rate))
 
         if self._rms_window_size < 1:
             raise ValueError("RMS window size is too small.")
 
         self._rms_kernel = (
-            np.ones(self._rms_window_size, dtype=np.float64)
-            / self._rms_window_size
+            np.ones(self._rms_window_size, dtype=np.float64) / self._rms_window_size
         )
 
         self.reset()
@@ -249,10 +244,13 @@ class LiveSignalProcessor:
 
         self._channel_shape = channel_shape
 
-        filter_state_length = max(
-            len(self._a),
-            len(self._b),
-        ) - 1
+        filter_state_length = (
+            max(
+                len(self._a),
+                len(self._b),
+            )
+            - 1
+        )
 
         self._filter_state = np.zeros(
             channel_shape + (filter_state_length,),
