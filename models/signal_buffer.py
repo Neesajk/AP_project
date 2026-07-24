@@ -58,6 +58,15 @@ class SignalBuffer:
         """Return a copy of all buffered data."""
         return self.data_buffer.copy()
 
+    def get_latest(self, sample_count: int) -> np.ndarray:
+        """Return a copy of the newest samples."""
+        if sample_count < 0:
+            raise ValueError("Sample count cannot be negative.")
+        if sample_count == 0:
+            return self.data_buffer[:, :0].copy()
+
+        return self.data_buffer[:, -sample_count:].copy()
+
     def get_channel(self, channel_index: int) -> np.ndarray:
         """Return a copy of one channel using a zero-based index."""
         if not 0 <= channel_index < self.channels:

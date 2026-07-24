@@ -48,15 +48,11 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         """Connect signals from the smaller views to the ViewModel."""
-        self.connection_view.connect_requested.connect(
-            self.viewmodel.connect_to_server
-        )
+        self.connection_view.connect_requested.connect(self.viewmodel.connect_to_server)
         self.connection_view.disconnect_requested.connect(
             self.viewmodel.disconnect_from_server
         )
-        self.signal_controls_view.channel_changed.connect(
-            self.viewmodel.select_channel
-        )
+        self.signal_controls_view.channel_changed.connect(self.viewmodel.select_channel)
         self.signal_controls_view.mode_changed.connect(
             self.viewmodel.select_signal_mode
         )
@@ -70,11 +66,10 @@ class MainWindow(QMainWindow):
 
         # The ViewModel updates the visible status without knowing GUI details.
         self.viewmodel.status_changed.connect(self.status_label.setText)
-        self.viewmodel.connection_changed.connect(
-            self.connection_view.set_connected
-        )
-        self.viewmodel.signal_data_changed.connect(
-            self.plot_view.update_signal
+        self.viewmodel.connection_changed.connect(self.connection_view.set_connected)
+        self.viewmodel.signal_data_changed.connect(self.plot_view.update_signal)
+        self.viewmodel.all_signal_data_changed.connect(
+            self.plot_view.update_all_signals
         )
 
     def _open_offline_view(self) -> None:
