@@ -82,6 +82,7 @@ class MainWindow(QMainWindow):
         self.offline_plot_view.show()
         self.offline_plot_view.raise_()
         self.offline_plot_view.activateWindow()
+        self.offline_plot_view.refresh_plot()
 
     def _on_offline_closed(self) -> None:
         """NEW: Team Member 3 - Cleanup when offline window closes."""

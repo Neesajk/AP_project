@@ -70,6 +70,10 @@ class OfflinePlotView(QWidget):
         """Store reference to ViewModel for data access."""
         self.viewmodel = viewmodel
 
+    def refresh_plot(self) -> None:
+        """Redraw the plot using the current controls."""
+        self._on_plot_clicked()
+
     def _on_plot_clicked(self) -> None:
         """Fetch signal from ViewModel and plot."""
         if not hasattr(self, "viewmodel"):
