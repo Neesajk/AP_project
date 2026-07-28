@@ -1,13 +1,13 @@
-"""Rolling buffer for received EMG signal samples."""
+"""Live and recorded storage for received EMG signal samples."""
 
 import numpy as np
 
 
 class SignalBuffer:
-    """Store the newest signal samples for a fixed time window.
+    """Store a rolling live window and the complete recording.
 
-    This contains the rolling-buffer behavior from the provided TCP model.
-    TCP byte collection and packet reconstruction remain in ``TcpClient``.
+    Recording chunks remain separate while streaming so appending data does not
+    repeatedly copy the complete recording.
     """
 
     def __init__(
@@ -23,6 +23,7 @@ class SignalBuffer:
 
         self.window_size = int(self.sampling_rate * self.window_seconds)
         self.data_buffer = np.empty((self.channels, 0), dtype=self.dtype)
+        self._recording_chunks: list[np.ndarray] = []
 
         # Used to calculate the total elapsed signal time.
         self.total_samples_received = 0
@@ -33,7 +34,7 @@ class SignalBuffer:
         return self.data_buffer.shape[1]
 
     def append(self, new_data: np.ndarray) -> None:
-        """Append data with shape ``(channels, samples)`` to the buffer."""
+        """Append data to the live window and complete recording."""
         new_data = np.asarray(new_data, dtype=self.dtype)
 
         if new_data.ndim != 2:
@@ -48,6 +49,9 @@ class SignalBuffer:
             (self.data_buffer, new_data),
             axis=1,
         )
+        if new_data.shape[1] > 0:
+            self._recording_chunks.append(new_data.copy())
+
         self.total_samples_received += new_data.shape[1]
 
         # Keep only the newest samples that fit in the time window.
@@ -84,11 +88,34 @@ class SignalBuffer:
         x = (first_sample + np.arange(y.shape[0])) / self.sampling_rate
         return x, y
 
+    def get_recording_window(
+        self,
+        channel_index: int,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return the complete recording for one selected channel."""
+        if not 0 <= channel_index < self.channels:
+            raise ValueError("Channel index is out of range.")
+
+        if not self._recording_chunks:
+            y = np.empty(0, dtype=self.dtype)
+        else:
+            y = np.concatenate(
+                [chunk[channel_index] for chunk in self._recording_chunks]
+            )
+
+        x = np.arange(y.shape[0]) / self.sampling_rate
+        return x, y
+
+    def has_recorded_data(self) -> bool:
+        """Return True when enough recorded samples are available for plotting."""
+        return self.total_samples_received >= 2
+
     def get_signal_time_seconds(self) -> float:
         """Return the total duration of all received samples in seconds."""
         return self.total_samples_received / self.sampling_rate
 
     def clear(self) -> None:
-        """Remove all samples from the buffer."""
+        """Remove all live and recorded samples."""
         self.data_buffer = np.empty((self.channels, 0), dtype=self.dtype)
+        self._recording_chunks.clear()
         self.total_samples_received = 0

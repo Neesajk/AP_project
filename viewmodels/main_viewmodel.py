@@ -135,46 +135,32 @@ class MainViewModel(QObject):
         channel_number: int,
         mode: str,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Get processed signal data for offline inspection.
-        
-        Args:
-            channel_number: 1-based channel index (1-32)
-            mode: "Original", "RMS", or "Filtered"
-        
-        Returns:
-            Tuple of (time_array, signal_array) both as numpy arrays
-        
-        Raises:
-            ValueError: If buffer empty, channel invalid, or mode unknown
-        """
-        # Check if buffer has data
-        if not self.signal_buffer.has_data():
+        """Return the complete recorded signal for offline inspection."""
+        if not self.signal_buffer.has_recorded_data():
             raise ValueError("No recorded data available.")
-        
-        # Validate channel
-        if not 1 <= channel_number <= 32:
-            raise ValueError(f"Invalid channel: {channel_number}. Must be 1-32.")
-        
-        # Convert to zero-based index
+
+        channel_count = self.signal_buffer.channels
+
+        if not 1 <= channel_number <= channel_count:
+            raise ValueError(
+                f"Invalid channel: {channel_number}. Must be 1-{channel_count}."
+            )
+
         channel_idx = channel_number - 1
-        
-        # Get raw data from buffer
+
         try:
-            x, y = self.signal_buffer.get_window(channel_idx)
-        except (IndexError, ValueError) as e:
-            raise ValueError(f"Cannot get channel data: {e}")
-        
-        # Apply signal processing
+            x, y = self.signal_buffer.get_recording_window(channel_idx)
+        except (IndexError, ValueError) as error:
+            raise ValueError(f"Cannot get channel data: {error}")
+
         try:
             y_processed = process_signal(y, mode, self.signal_buffer.sampling_rate)
-        except ValueError as e:
-            raise ValueError(f"Signal processing failed: {e}")
-        
-        # Ensure no empty data
+        except ValueError as error:
+            raise ValueError(f"Signal processing failed: {error}")
+
         if len(x) == 0 or len(y_processed) == 0:
             raise ValueError("Signal data is empty.")
-        
+
         return x, y_processed
 
     def _receive_data(self) -> None:
