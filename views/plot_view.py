@@ -74,28 +74,14 @@ class PlotView(QWidget):
 
         self.view = self.grid.add_view(
             row=0,
-            col=2,
+            col=1,
             border_color="#374151",
         )
         self.view.camera = scene.PanZoomCamera(aspect=None)
         self.view.camera.interactive = True
 
-        self.channel_label_view = self.grid.add_view(
-            row=0,
-            col=1,
-        )
-        self.channel_label_view.camera = scene.PanZoomCamera(aspect=None)
-        self.channel_label_view.camera.interactive = False
-        self.channel_label_view.camera.rect = (0, 0, 1, 1)
-        self.view.camera.link(
-            self.channel_label_view.camera,
-            axis="y",
-        )
-        self.channel_label_view.width_min = 1
-        self.channel_label_view.width_max = 1
-
         self.grid.add_widget(self.y_axis, row=0, col=0)
-        self.grid.add_widget(self.x_axis, row=1, col=2)
+        self.grid.add_widget(self.x_axis, row=1, col=1)
 
         self.y_axis.link_view(self.view)
         self.x_axis.link_view(self.view)
@@ -114,16 +100,30 @@ class PlotView(QWidget):
             parent=self.view.scene,
         )
 
-        self.channel_labels = scene.Text(
-            text="",
-            color="#e5e7eb",
-            font_size=8,
-            pos=(0, 0),
-            anchor_x="right",
-            anchor_y="center",
-            parent=self.channel_label_view.scene,
+        self.channel_label_widget = QWidget()
+        self.channel_label_widget.setFixedWidth(90)
+        self.channel_label_widget.setStyleSheet(
+            "background: #111827; color: #e5e7eb;"
         )
-        self.channel_labels.visible = False
+        channel_label_layout = QVBoxLayout(self.channel_label_widget)
+        channel_label_layout.setContentsMargins(4, 10, 4, 65)
+        channel_label_layout.setSpacing(0)
+
+        self.channel_labels = []
+
+        for _ in range(self.VISIBLE_CHANNEL_COUNT):
+            label = QLabel()
+            label.setAlignment(
+                Qt.AlignmentFlag.AlignRight
+                | Qt.AlignmentFlag.AlignVCenter
+            )
+            label.setStyleSheet(
+                "font-size: 11px; padding-right: 4px;"
+            )
+            channel_label_layout.addWidget(label, stretch=1)
+            self.channel_labels.append(label)
+
+        self.channel_label_widget.hide()
 
         self.channel_scrollbar = QScrollBar(Qt.Orientation.Vertical)
         self.channel_scrollbar.valueChanged.connect(
@@ -134,6 +134,7 @@ class PlotView(QWidget):
         plot_layout = QHBoxLayout()
         plot_layout.setContentsMargins(0, 0, 0, 0)
         plot_layout.setSpacing(0)
+        plot_layout.addWidget(self.channel_label_widget)
         plot_layout.addWidget(self.canvas.native, stretch=1)
         plot_layout.addWidget(self.channel_scrollbar)
 
@@ -231,15 +232,7 @@ class PlotView(QWidget):
 
     def _set_channel_labels_visible(self, visible: bool) -> None:
         """Show or collapse the fixed channel-label column."""
-        self.channel_labels.visible = visible
-
-        if visible:
-            self.channel_label_view.width_max = 85
-            self.channel_label_view.width_min = 85
-        else:
-            # A zero-width VisPy ViewBox produces a singular camera matrix.
-            self.channel_label_view.width_min = 1
-            self.channel_label_view.width_max = 1
+        self.channel_label_widget.setVisible(visible)
 
     def _activate_plot(self, plot_key: tuple[str, int, str]) -> None:
         """Restore auto-fit when the displayed channel or mode changes."""
@@ -346,7 +339,6 @@ class PlotView(QWidget):
             channel_range = 1.0
 
         offset_step = channel_range * 1.5
-        signal_midpoint = (signal_min + signal_max) / 2
         channel_count = data.shape[0]
         channel_offsets = (
             np.arange(channel_count - 1, -1, -1) * offset_step
@@ -416,21 +408,6 @@ class PlotView(QWidget):
         if x_span == 0:
             x_span = 1.0
 
-        label_positions = np.column_stack(
-            (
-                np.full(channel_count, 0.95),
-                signal_midpoint + channel_offsets,
-            )
-        )
-        labels = [
-            f"Channel {channel_number}"
-            for channel_number in range(1, channel_count + 1)
-        ]
-
-        if self.channel_labels.text != labels:
-            self.channel_labels.text = labels
-
-        self.channel_labels.pos = label_positions
         self._set_channel_labels_visible(True)
 
         self.title_label.setText(f"All {channel_count} Channels - {mode}")
@@ -478,6 +455,15 @@ class PlotView(QWidget):
             first_channel + visible_channels,
             channel_count,
         )
+
+        for label_index, label in enumerate(self.channel_labels):
+            channel_number = first_channel + label_index + 1
+            is_visible = channel_number <= last_channel
+            label.setVisible(is_visible)
+
+            if is_visible:
+                label.setText(f"Channel {channel_number}")
+
         visible_bounds = [
             bounds
             for bounds in self._all_channel_y_bounds[first_channel:last_channel]
