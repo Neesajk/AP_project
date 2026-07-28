@@ -1,11 +1,7 @@
 """View model for the main EMG visualization window."""
 
-from __future__ import annotations
-
 import numpy as np
 from PySide6.QtCore import QObject, QTimer, Signal
-
-import numpy as np
 
 from models.signal_buffer import SignalBuffer
 from models.signal_processing import LiveSignalProcessor, process_signal

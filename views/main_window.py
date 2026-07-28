@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 
 from viewmodels.main_viewmodel import MainViewModel
 from views.connection_view import ConnectionView
-from views.offline_plot_view import OfflinePlotView  # NEW: Team Member 3
+from views.offline_plot_view import OfflinePlotView
 from views.plot_view import PlotView
 from views.signal_controls_view import SignalControlsView
 
@@ -29,7 +29,7 @@ class MainWindow(QMainWindow):
         self.signal_controls_view = SignalControlsView()
         self.plot_view = PlotView()
         self.status_label = QLabel("Not connected")
-        self.offline_plot_view = None  # NEW: Team Member 3
+        self.offline_plot_view = None
 
         self._build_layout()
         self._connect_signals()
@@ -59,7 +59,6 @@ class MainWindow(QMainWindow):
         self.signal_controls_view.plot_all_requested.connect(
             self.viewmodel.plot_all_channels
         )
-        # NEW: Team Member 3 - Offline View
         self.signal_controls_view.offline_view_requested.connect(
             self._open_offline_view
         )
@@ -73,7 +72,7 @@ class MainWindow(QMainWindow):
         )
 
     def _open_offline_view(self) -> None:
-        """NEW: Team Member 3 - Open offline inspection window."""
+        """Open the offline inspection window."""
         if self.offline_plot_view is None:
             self.offline_plot_view = OfflinePlotView()
             self.offline_plot_view.set_viewmodel(self.viewmodel)
@@ -85,7 +84,7 @@ class MainWindow(QMainWindow):
         self.offline_plot_view.refresh_plot()
 
     def _on_offline_closed(self) -> None:
-        """NEW: Team Member 3 - Cleanup when offline window closes."""
+        """Clear the offline window reference after it closes."""
         self.offline_plot_view = None
 
     def closeEvent(self, event: QCloseEvent) -> None:
