@@ -4,9 +4,4 @@ __pycache__/
 .idea/
 .vscode/
 tests/
-.DS_Store
-*.log
-.env
-*.sqlite3
-*.db
 README_FinalProject_2026_short.md
