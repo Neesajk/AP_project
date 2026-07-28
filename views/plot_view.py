@@ -91,8 +91,8 @@ class PlotView(QWidget):
             self.channel_label_view.camera,
             axis="y",
         )
-        self.channel_label_view.width_min = 0
-        self.channel_label_view.width_max = 0
+        self.channel_label_view.width_min = 1
+        self.channel_label_view.width_max = 1
 
         self.grid.add_widget(self.y_axis, row=0, col=0)
         self.grid.add_widget(self.x_axis, row=1, col=2)
@@ -237,8 +237,9 @@ class PlotView(QWidget):
             self.channel_label_view.width_max = 85
             self.channel_label_view.width_min = 85
         else:
-            self.channel_label_view.width_min = 0
-            self.channel_label_view.width_max = 0
+            # A zero-width VisPy ViewBox produces a singular camera matrix.
+            self.channel_label_view.width_min = 1
+            self.channel_label_view.width_max = 1
 
     def _activate_plot(self, plot_key: tuple[str, int, str]) -> None:
         """Restore auto-fit when the displayed channel or mode changes."""
