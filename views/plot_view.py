@@ -82,6 +82,17 @@ class PlotView(QWidget):
             parent=self.view.scene,
         )
 
+        self.channel_labels = scene.Text(
+            text="",
+            color="#e5e7eb",
+            font_size=8,
+            pos=(0, 0),
+            anchor_x="right",
+            anchor_y="center",
+            parent=self.view.scene,
+        )
+        self.channel_labels.visible = False
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.title_label)
@@ -121,6 +132,7 @@ class PlotView(QWidget):
             pos=positions,
             connect="strip",
         )
+        self.channel_labels.visible = False
 
         self.title_label.setText(f"Channel {channel_number} - {mode}")
 
@@ -133,6 +145,7 @@ class PlotView(QWidget):
             pos=np.empty((0, 2), dtype=np.float32),
             connect="strip",
         )
+        self.channel_labels.visible = False
 
         self.title_label.setText("Waiting for signal data")
         self.canvas.update()
@@ -198,12 +211,15 @@ class PlotView(QWidget):
             self.clear()
             return
 
-        channel_range = float(np.max(finite_data) - np.min(finite_data))
+        signal_min = float(np.min(finite_data))
+        signal_max = float(np.max(finite_data))
+        channel_range = signal_max - signal_min
 
         if not np.isfinite(channel_range) or channel_range == 0:
             channel_range = 1.0
 
         offset_step = channel_range * 1.5
+        signal_midpoint = (signal_min + signal_max) / 2
 
         combined_positions = []
         combined_connect = []
@@ -251,13 +267,37 @@ class PlotView(QWidget):
         )
 
         channel_count = data.shape[0]
+        x_min = float(x.min())
+        x_max = float(x.max())
+        x_span = x_max - x_min
+
+        if x_span == 0:
+            x_span = 1.0
+
+        label_x = x_min - x_span * 0.02
+        label_positions = np.column_stack(
+            (
+                np.full(channel_count, label_x),
+                signal_midpoint + np.arange(channel_count) * offset_step,
+            )
+        )
+        labels = [
+            f"Channel {channel_number}"
+            for channel_number in range(1, channel_count + 1)
+        ]
+
+        if self.channel_labels.text != labels:
+            self.channel_labels.text = labels
+
+        self.channel_labels.pos = label_positions
+        self.channel_labels.visible = True
 
         self.title_label.setText(f"All {channel_count} Channels - {mode}")
 
         self.view.camera.set_range(
             x=(
-                float(x.min()),
-                float(x.max()),
+                x_min - x_span * 0.18,
+                x_max,
             ),
             y=(
                 float(positions[:, 1].min()),
