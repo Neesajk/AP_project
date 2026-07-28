@@ -5,8 +5,10 @@ from __future__ import annotations
 import numpy as np
 from PySide6.QtCore import QObject, QTimer, Signal
 
+import numpy as np
+
 from models.signal_buffer import SignalBuffer
-from models.signal_processing import LiveSignalProcessor
+from models.signal_processing import LiveSignalProcessor, process_signal
 from services.tcp_client import TcpClient
 
 
@@ -127,6 +129,39 @@ class MainViewModel(QObject):
 
         if self.tcp_client.is_connected:
             self.tcp_client.disconnect_from_server()
+
+    def get_offline_signal(
+        self,
+        channel_number: int,
+        mode: str,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return the complete recorded signal for offline inspection."""
+        if not self.signal_buffer.has_recorded_data():
+            raise ValueError("No recorded data available.")
+
+        channel_count = self.signal_buffer.channels
+
+        if not 1 <= channel_number <= channel_count:
+            raise ValueError(
+                f"Invalid channel: {channel_number}. Must be 1-{channel_count}."
+            )
+
+        channel_idx = channel_number - 1
+
+        try:
+            x, y = self.signal_buffer.get_recording_window(channel_idx)
+        except (IndexError, ValueError) as error:
+            raise ValueError(f"Cannot get channel data: {error}")
+
+        try:
+            y_processed = process_signal(y, mode, self.signal_buffer.sampling_rate)
+        except ValueError as error:
+            raise ValueError(f"Signal processing failed: {error}")
+
+        if len(x) == 0 or len(y_processed) == 0:
+            raise ValueError("Signal data is empty.")
+
+        return x, y_processed
 
     def _receive_data(self) -> None:
         """Poll the TCP service and process only newly received samples."""
