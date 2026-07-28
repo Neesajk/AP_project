@@ -2,6 +2,7 @@
 
 import numpy as np
 from PySide6.QtCore import Signal
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -61,7 +62,7 @@ class OfflinePlotView(QWidget):
 
         # Connect signals
         self.plot_button.clicked.connect(self._on_plot_clicked)
-        self.close_button.clicked.connect(self._on_close_clicked)
+        self.close_button.clicked.connect(self.close)
         # Auto-update when controls change
         self.channel_spinbox.valueChanged.connect(self._on_plot_clicked)
         self.mode_combo.currentTextChanged.connect(self._on_plot_clicked)
@@ -126,7 +127,7 @@ class OfflinePlotView(QWidget):
         ax.set_yticks([])
         self.canvas.draw()
 
-    def _on_close_clicked(self) -> None:
-        """Close the offline inspection window."""
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Notify the main window whenever this window is closed."""
         self.closed.emit()
-        self.close()
+        super().closeEvent(event)

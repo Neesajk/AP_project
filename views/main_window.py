@@ -90,5 +90,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Release application resources before closing the window."""
+        if self.offline_plot_view is not None:
+            self.offline_plot_view.close()
+
         self.viewmodel.shutdown()
         super().closeEvent(event)
