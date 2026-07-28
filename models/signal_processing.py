@@ -1,7 +1,5 @@
 """Signal-processing functions for EMG data."""
 
-from __future__ import annotations
-
 import numpy as np
 from scipy import signal
 
