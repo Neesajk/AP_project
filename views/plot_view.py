@@ -24,6 +24,13 @@ class PlotView(QWidget):
             show=False,
         )
         self.canvas.native.setMinimumHeight(350)
+        self.canvas.events.mouse_press.connect(self._pause_auto_fit)
+        self.canvas.events.mouse_wheel.connect(self._pause_auto_fit)
+        self.canvas.events.mouse_double_click.connect(self._restore_auto_fit)
+
+        self._active_plot = None
+        self._auto_fit = True
+        self._latest_camera_range = None
 
         self.grid = self.canvas.central_widget.add_grid(
             margin=10,
@@ -127,6 +134,8 @@ class PlotView(QWidget):
             copy=False,
         )
 
+        self._activate_plot(("single", channel_number, mode))
+
         # Reset the connection mode after displaying all channels.
         self.line.set_data(
             pos=positions,
@@ -146,9 +155,48 @@ class PlotView(QWidget):
             connect="strip",
         )
         self.channel_labels.visible = False
+        self._active_plot = None
+        self._auto_fit = True
+        self._latest_camera_range = None
 
         self.title_label.setText("Waiting for signal data")
         self.canvas.update()
+
+    def _activate_plot(self, plot_key: tuple[str, int, str]) -> None:
+        """Restore auto-fit when the displayed channel or mode changes."""
+        if plot_key == self._active_plot:
+            return
+
+        self._active_plot = plot_key
+        self._auto_fit = True
+
+    def _pause_auto_fit(self, _event=None) -> None:
+        """Preserve the camera range after the user starts navigating."""
+        self._auto_fit = False
+
+    def _restore_auto_fit(self, _event=None) -> None:
+        """Resume following live data when the user double-clicks the plot."""
+        self._auto_fit = True
+
+        if self._latest_camera_range is not None:
+            self.view.camera.set_range(**self._latest_camera_range)
+            self.canvas.update()
+
+    def _update_camera_range(
+        self,
+        x_range: tuple[float, float],
+        y_range: tuple[float, float],
+        margin: float,
+    ) -> None:
+        """Store the latest data bounds and apply them while auto-fit is active."""
+        self._latest_camera_range = {
+            "x": x_range,
+            "y": y_range,
+            "margin": margin,
+        }
+
+        if self._auto_fit:
+            self.view.camera.set_range(**self._latest_camera_range)
 
     def _fit_camera(
         self,
@@ -171,9 +219,9 @@ class PlotView(QWidget):
         else:
             y_padding = (y_max - y_min) * 0.08
 
-        self.view.camera.set_range(
-            x=(x_min - x_padding, x_max + x_padding),
-            y=(y_min - y_padding, y_max + y_padding),
+        self._update_camera_range(
+            x_range=(x_min - x_padding, x_max + x_padding),
+            y_range=(y_min - y_padding, y_max + y_padding),
             margin=0,
         )
 
@@ -267,6 +315,8 @@ class PlotView(QWidget):
         )
 
         channel_count = data.shape[0]
+        self._activate_plot(("all", channel_count, mode))
+
         x_min = float(x.min())
         x_max = float(x.max())
         x_span = x_max - x_min
@@ -294,12 +344,12 @@ class PlotView(QWidget):
 
         self.title_label.setText(f"All {channel_count} Channels - {mode}")
 
-        self.view.camera.set_range(
-            x=(
+        self._update_camera_range(
+            x_range=(
                 x_min - x_span * 0.18,
                 x_max,
             ),
-            y=(
+            y_range=(
                 float(positions[:, 1].min()),
                 float(positions[:, 1].max()),
             ),
