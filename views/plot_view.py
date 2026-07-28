@@ -16,9 +16,8 @@ from vispy import scene
 class PlotView(QWidget):
     """Display a live, interactive plot of the selected signal channel."""
 
-    DEFAULT_VISIBLE_CHANNEL_COUNT = 8
+    DEFAULT_VISIBLE_CHANNEL_COUNT = 32
     MIN_VISIBLE_CHANNEL_COUNT = 2
-    CHANNEL_ZOOM_STEP = 2
     CHANNEL_LABEL_WIDTH = 90
     Y_AXIS_WIDTH = 75
     X_AXIS_HEIGHT = 55
@@ -280,13 +279,16 @@ class PlotView(QWidget):
     def _zoom_in_all_channels(self) -> None:
         """Show fewer channels at a larger vertical scale."""
         self._set_visible_channel_count(
-            self._visible_channel_count - self.CHANNEL_ZOOM_STEP
+            max(
+                self.MIN_VISIBLE_CHANNEL_COUNT,
+                self._visible_channel_count // 2,
+            )
         )
 
     def _zoom_out_all_channels(self) -> None:
         """Show more channels at a smaller vertical scale."""
         self._set_visible_channel_count(
-            self._visible_channel_count + self.CHANNEL_ZOOM_STEP
+            self._visible_channel_count * 2
         )
 
     def _set_visible_channel_count(self, requested_count: int) -> None:
