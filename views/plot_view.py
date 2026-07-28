@@ -74,14 +74,28 @@ class PlotView(QWidget):
 
         self.view = self.grid.add_view(
             row=0,
-            col=1,
+            col=2,
             border_color="#374151",
         )
         self.view.camera = scene.PanZoomCamera(aspect=None)
         self.view.camera.interactive = True
 
+        self.channel_label_view = self.grid.add_view(
+            row=0,
+            col=1,
+        )
+        self.channel_label_view.camera = scene.PanZoomCamera(aspect=None)
+        self.channel_label_view.camera.interactive = False
+        self.channel_label_view.camera.rect = (0, 0, 1, 1)
+        self.view.camera.link(
+            self.channel_label_view.camera,
+            axis="y",
+        )
+        self.channel_label_view.width_min = 0
+        self.channel_label_view.width_max = 0
+
         self.grid.add_widget(self.y_axis, row=0, col=0)
-        self.grid.add_widget(self.x_axis, row=1, col=1)
+        self.grid.add_widget(self.x_axis, row=1, col=2)
 
         self.y_axis.link_view(self.view)
         self.x_axis.link_view(self.view)
@@ -107,7 +121,7 @@ class PlotView(QWidget):
             pos=(0, 0),
             anchor_x="right",
             anchor_y="center",
-            parent=self.view.scene,
+            parent=self.channel_label_view.scene,
         )
         self.channel_labels.visible = False
 
@@ -164,7 +178,7 @@ class PlotView(QWidget):
             pos=positions,
             connect="strip",
         )
-        self.channel_labels.visible = False
+        self._set_channel_labels_visible(False)
         self.channel_scrollbar.hide()
 
         self.title_label.setText(f"Channel {channel_number} - {mode}")
@@ -178,7 +192,7 @@ class PlotView(QWidget):
             pos=np.empty((0, 2), dtype=np.float32),
             connect="strip",
         )
-        self.channel_labels.visible = False
+        self._set_channel_labels_visible(False)
         self.channel_scrollbar.hide()
         self._active_plot = None
         self._auto_fit = True
@@ -214,6 +228,17 @@ class PlotView(QWidget):
 
         event.accept()
         return True
+
+    def _set_channel_labels_visible(self, visible: bool) -> None:
+        """Show or collapse the fixed channel-label column."""
+        self.channel_labels.visible = visible
+
+        if visible:
+            self.channel_label_view.width_max = 85
+            self.channel_label_view.width_min = 85
+        else:
+            self.channel_label_view.width_min = 0
+            self.channel_label_view.width_max = 0
 
     def _activate_plot(self, plot_key: tuple[str, int, str]) -> None:
         """Restore auto-fit when the displayed channel or mode changes."""
@@ -390,10 +415,9 @@ class PlotView(QWidget):
         if x_span == 0:
             x_span = 1.0
 
-        label_x = x_min - x_span * 0.02
         label_positions = np.column_stack(
             (
-                np.full(channel_count, label_x),
+                np.full(channel_count, 0.95),
                 signal_midpoint + channel_offsets,
             )
         )
@@ -406,13 +430,13 @@ class PlotView(QWidget):
             self.channel_labels.text = labels
 
         self.channel_labels.pos = label_positions
-        self.channel_labels.visible = True
+        self._set_channel_labels_visible(True)
 
         self.title_label.setText(f"All {channel_count} Channels - {mode}")
 
         self._all_channel_x_bounds = (
-            x_min - x_span * 0.18,
-            x_max,
+            x_min - x_span * 0.01,
+            x_max + x_span * 0.01,
         )
         self._all_channel_y_bounds = channel_bounds
 
