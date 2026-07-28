@@ -5,6 +5,7 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollBar,
     QVBoxLayout,
     QWidget,
@@ -15,7 +16,9 @@ from vispy import scene
 class PlotView(QWidget):
     """Display a live, interactive plot of the selected signal channel."""
 
-    VISIBLE_CHANNEL_COUNT = 8
+    DEFAULT_VISIBLE_CHANNEL_COUNT = 8
+    MIN_VISIBLE_CHANNEL_COUNT = 2
+    CHANNEL_ZOOM_STEP = 2
     CHANNEL_LABEL_WIDTH = 90
     Y_AXIS_WIDTH = 75
     X_AXIS_HEIGHT = 55
@@ -46,6 +49,7 @@ class PlotView(QWidget):
         self._latest_camera_range = None
         self._all_channel_x_bounds = None
         self._all_channel_y_bounds = []
+        self._visible_channel_count = self.DEFAULT_VISIBLE_CHANNEL_COUNT
 
         self.grid = self.canvas.central_widget.add_grid(
             margin=10,
@@ -117,20 +121,25 @@ class PlotView(QWidget):
         channel_label_layout.setSpacing(0)
 
         self.channel_labels = []
-
-        for _ in range(self.VISIBLE_CHANNEL_COUNT):
-            label = QLabel()
-            label.setAlignment(
-                Qt.AlignmentFlag.AlignRight
-                | Qt.AlignmentFlag.AlignVCenter
-            )
-            label.setStyleSheet(
-                "font-size: 11px; padding-right: 4px;"
-            )
-            channel_label_layout.addWidget(label, stretch=1)
-            self.channel_labels.append(label)
-
+        self._channel_label_layout = channel_label_layout
         self.channel_label_widget.hide()
+
+        self.visible_channel_label = QLabel()
+        self.zoom_in_button = QPushButton("Zoom In")
+        self.zoom_out_button = QPushButton("Zoom Out")
+        self.zoom_in_button.clicked.connect(self._zoom_in_all_channels)
+        self.zoom_out_button.clicked.connect(self._zoom_out_all_channels)
+
+        self.all_channel_controls = QWidget()
+        all_channel_controls_layout = QHBoxLayout(
+            self.all_channel_controls
+        )
+        all_channel_controls_layout.setContentsMargins(8, 2, 8, 2)
+        all_channel_controls_layout.addWidget(self.visible_channel_label)
+        all_channel_controls_layout.addStretch()
+        all_channel_controls_layout.addWidget(self.zoom_in_button)
+        all_channel_controls_layout.addWidget(self.zoom_out_button)
+        self.all_channel_controls.hide()
 
         self.channel_scrollbar = QScrollBar(Qt.Orientation.Vertical)
         self.channel_scrollbar.valueChanged.connect(
@@ -147,6 +156,7 @@ class PlotView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.title_label)
+        layout.addWidget(self.all_channel_controls)
         layout.addLayout(plot_layout, stretch=1)
 
     def update_signal(
@@ -186,6 +196,7 @@ class PlotView(QWidget):
             connect="strip",
         )
         self._set_channel_labels_visible(False)
+        self.all_channel_controls.hide()
         self.channel_scrollbar.hide()
 
         self.title_label.setText(f"Channel {channel_number} - {mode}")
@@ -200,6 +211,7 @@ class PlotView(QWidget):
             connect="strip",
         )
         self._set_channel_labels_visible(False)
+        self.all_channel_controls.hide()
         self.channel_scrollbar.hide()
         self._active_plot = None
         self._auto_fit = True
@@ -250,6 +262,74 @@ class PlotView(QWidget):
         if visible:
             self._position_channel_labels()
             self.channel_label_widget.raise_()
+
+    def _ensure_channel_labels(self, channel_count: int) -> None:
+        """Create reusable labels for every available channel."""
+        while len(self.channel_labels) < channel_count:
+            label = QLabel()
+            label.setAlignment(
+                Qt.AlignmentFlag.AlignRight
+                | Qt.AlignmentFlag.AlignVCenter
+            )
+            label.setStyleSheet(
+                "font-size: 11px; padding-right: 4px;"
+            )
+            self._channel_label_layout.addWidget(label, stretch=1)
+            self.channel_labels.append(label)
+
+    def _zoom_in_all_channels(self) -> None:
+        """Show fewer channels at a larger vertical scale."""
+        self._set_visible_channel_count(
+            self._visible_channel_count - self.CHANNEL_ZOOM_STEP
+        )
+
+    def _zoom_out_all_channels(self) -> None:
+        """Show more channels at a smaller vertical scale."""
+        self._set_visible_channel_count(
+            self._visible_channel_count + self.CHANNEL_ZOOM_STEP
+        )
+
+    def _set_visible_channel_count(self, requested_count: int) -> None:
+        """Apply an all-channel zoom level within the available range."""
+        channel_count = len(self._all_channel_y_bounds)
+
+        if channel_count == 0:
+            return
+
+        self._visible_channel_count = min(
+            max(requested_count, self.MIN_VISIBLE_CHANNEL_COUNT),
+            channel_count,
+        )
+        self._configure_all_channel_navigation()
+        self._update_all_channel_camera(self.channel_scrollbar.value())
+
+    def _configure_all_channel_navigation(self) -> None:
+        """Update scrolling and zoom controls for the current zoom level."""
+        channel_count = len(self._all_channel_y_bounds)
+
+        if channel_count == 0:
+            return
+
+        visible_channels = min(
+            self._visible_channel_count,
+            channel_count,
+        )
+        maximum_start = max(0, channel_count - visible_channels)
+
+        self.channel_scrollbar.setRange(0, maximum_start)
+        self.channel_scrollbar.setPageStep(visible_channels)
+        self.channel_scrollbar.setSingleStep(1)
+        self.channel_scrollbar.setEnabled(maximum_start > 0)
+
+        self.visible_channel_label.setText(
+            f"{visible_channels} channels visible"
+        )
+        self.zoom_in_button.setEnabled(
+            visible_channels > self.MIN_VISIBLE_CHANNEL_COUNT
+        )
+        self.zoom_out_button.setEnabled(
+            visible_channels < channel_count
+        )
 
     def _position_channel_labels(self) -> None:
         """Place channel names beside the traces without covering the axes."""
@@ -431,8 +511,11 @@ class PlotView(QWidget):
             connect=connect,
         )
 
+        entering_all_channel_mode = (
+            self._active_plot is None
+            or self._active_plot[0] != "all"
+        )
         plot_key = ("all", channel_count, mode)
-        plot_changed = plot_key != self._active_plot
         self._activate_plot(plot_key)
 
         x_min = float(x.min())
@@ -452,19 +535,18 @@ class PlotView(QWidget):
         )
         self._all_channel_y_bounds = channel_bounds
 
-        visible_channels = min(
-            self.VISIBLE_CHANNEL_COUNT,
-            channel_count,
-        )
-        maximum_start = max(0, channel_count - visible_channels)
+        if entering_all_channel_mode:
+            self._visible_channel_count = min(
+                self.DEFAULT_VISIBLE_CHANNEL_COUNT,
+                channel_count,
+            )
 
-        self.channel_scrollbar.setRange(0, maximum_start)
-        self.channel_scrollbar.setPageStep(visible_channels)
-        self.channel_scrollbar.setSingleStep(1)
-        self.channel_scrollbar.setEnabled(maximum_start > 0)
+        self._ensure_channel_labels(channel_count)
+        self._configure_all_channel_navigation()
+        self.all_channel_controls.show()
         self.channel_scrollbar.show()
 
-        if plot_changed:
+        if entering_all_channel_mode:
             self.channel_scrollbar.setValue(0)
 
         self._update_all_channel_camera()
@@ -481,7 +563,7 @@ class PlotView(QWidget):
 
         channel_count = len(self._all_channel_y_bounds)
         visible_channels = min(
-            self.VISIBLE_CHANNEL_COUNT,
+            self._visible_channel_count,
             channel_count,
         )
         first_channel = self.channel_scrollbar.value()
