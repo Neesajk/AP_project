@@ -86,7 +86,7 @@ python main.py
 ```
 models/
   ├── signal_buffer.py       # Rolling buffer (all teams)
-  └── signal_processor.py    # RMS & filter (Team Member 3)
+  └── signal_processing.py   # Live + offline signal processing
 
 services/
   └── tcp_client.py          # TCP protocol (Team Member 1)
@@ -106,7 +106,7 @@ views/
 ### Architecture
 
 **Model/Service Layer (data & processing)**
-- `signal_processor.py`: RMS, filtering
+- `signal_processing.py`: Live and offline signal processing
 - `signal_buffer.py`: Rolling buffer storage
 - `tcp_client.py`: Network I/O
 
@@ -131,7 +131,7 @@ views/
 5. ViewModel:
    - Validates channel number
    - Gets raw data from signal_buffer
-   - Calls `process_offline_signal()` to apply mode
+  - Calls `process_signal()` to apply the selected mode
    - Returns (time_array, signal_array)
 6. OfflinePlotView plots using Matplotlib
 7. Errors are caught and displayed in plot area
@@ -174,10 +174,10 @@ views/
 ## File Changes by Team Member 3
 
 **Created:**
-- `models/signal_processor.py` - RMS & filter functions
 - `views/offline_plot_view.py` - Matplotlib viewer
 
 **Modified:**
+- `models/signal_processing.py` - Shared live/offline signal processing
 - `views/signal_controls_view.py` - Added "Offline View" button + signal
 - `views/main_window.py` - Integrated offline view window
 - `viewmodels/main_viewmodel.py` - Added `get_offline_signal()` method

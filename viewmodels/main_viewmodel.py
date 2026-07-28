@@ -8,8 +8,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 import numpy as np
 
 from models.signal_buffer import SignalBuffer
-from models.signal_processor import process_offline_signal
-from models.signal_processing import LiveSignalProcessor
+from models.signal_processing import LiveSignalProcessor, process_signal
 from services.tcp_client import TcpClient
 
 
@@ -168,7 +167,7 @@ class MainViewModel(QObject):
         
         # Apply signal processing
         try:
-            y_processed = process_offline_signal(y, mode)
+            y_processed = process_signal(y, mode, self.signal_buffer.sampling_rate)
         except ValueError as e:
             raise ValueError(f"Signal processing failed: {e}")
         
