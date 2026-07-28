@@ -16,6 +16,10 @@ class PlotView(QWidget):
     """Display a live, interactive plot of the selected signal channel."""
 
     VISIBLE_CHANNEL_COUNT = 8
+    CHANNEL_LABEL_WIDTH = 90
+    Y_AXIS_WIDTH = 75
+    X_AXIS_HEIGHT = 55
+    GRID_MARGIN = 10
 
     def __init__(self):
         super().__init__()
@@ -62,7 +66,7 @@ class PlotView(QWidget):
             axis_label_margin=42,
             **axis_style,
         )
-        self.y_axis.width_max = 75
+        self.y_axis.width_max = self.Y_AXIS_WIDTH
 
         self.x_axis = scene.AxisWidget(
             orientation="bottom",
@@ -70,7 +74,7 @@ class PlotView(QWidget):
             axis_label_margin=32,
             **axis_style,
         )
-        self.x_axis.height_max = 55
+        self.x_axis.height_max = self.X_AXIS_HEIGHT
 
         self.view = self.grid.add_view(
             row=0,
@@ -100,13 +104,16 @@ class PlotView(QWidget):
             parent=self.view.scene,
         )
 
-        self.channel_label_widget = QWidget()
-        self.channel_label_widget.setFixedWidth(90)
+        self.channel_label_widget = QWidget(self.canvas.native)
+        self.channel_label_widget.setFixedWidth(self.CHANNEL_LABEL_WIDTH)
+        self.channel_label_widget.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
         self.channel_label_widget.setStyleSheet(
             "background: #111827; color: #e5e7eb;"
         )
         channel_label_layout = QVBoxLayout(self.channel_label_widget)
-        channel_label_layout.setContentsMargins(4, 10, 4, 65)
+        channel_label_layout.setContentsMargins(4, 0, 4, 0)
         channel_label_layout.setSpacing(0)
 
         self.channel_labels = []
@@ -134,7 +141,6 @@ class PlotView(QWidget):
         plot_layout = QHBoxLayout()
         plot_layout.setContentsMargins(0, 0, 0, 0)
         plot_layout.setSpacing(0)
-        plot_layout.addWidget(self.channel_label_widget)
         plot_layout.addWidget(self.canvas.native, stretch=1)
         plot_layout.addWidget(self.channel_scrollbar)
 
@@ -206,6 +212,13 @@ class PlotView(QWidget):
 
     def eventFilter(self, watched, event) -> bool:
         """Use the mouse wheel to scroll channels in the all-channel view."""
+        if (
+            watched is self.canvas.native
+            and event.type() == QEvent.Type.Resize
+            and hasattr(self, "channel_label_widget")
+        ):
+            self._position_channel_labels()
+
         is_all_channel_wheel = (
             watched is self.canvas.native
             and event.type() == QEvent.Type.Wheel
@@ -233,6 +246,27 @@ class PlotView(QWidget):
     def _set_channel_labels_visible(self, visible: bool) -> None:
         """Show or collapse the fixed channel-label column."""
         self.channel_label_widget.setVisible(visible)
+
+        if visible:
+            self._position_channel_labels()
+            self.channel_label_widget.raise_()
+
+    def _position_channel_labels(self) -> None:
+        """Place channel names beside the traces without covering the axes."""
+        label_height = max(
+            self.canvas.native.height()
+            - self.X_AXIS_HEIGHT
+            - 2 * self.GRID_MARGIN,
+            1,
+        )
+        label_x = self.Y_AXIS_WIDTH + self.GRID_MARGIN
+
+        self.channel_label_widget.setGeometry(
+            label_x,
+            self.GRID_MARGIN,
+            self.CHANNEL_LABEL_WIDTH,
+            label_height,
+        )
 
     def _activate_plot(self, plot_key: tuple[str, int, str]) -> None:
         """Restore auto-fit when the displayed channel or mode changes."""
@@ -413,7 +447,7 @@ class PlotView(QWidget):
         self.title_label.setText(f"All {channel_count} Channels - {mode}")
 
         self._all_channel_x_bounds = (
-            x_min - x_span * 0.01,
+            x_min - x_span * 0.16,
             x_max + x_span * 0.01,
         )
         self._all_channel_y_bounds = channel_bounds
