@@ -1,13 +1,21 @@
 """Live plot area for the main window."""
 
 import numpy as np
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QScrollBar,
+    QVBoxLayout,
+    QWidget,
+)
 from vispy import scene
 
 
 class PlotView(QWidget):
     """Display a live, interactive plot of the selected signal channel."""
+
+    VISIBLE_CHANNEL_COUNT = 8
 
     def __init__(self):
         super().__init__()
@@ -24,6 +32,7 @@ class PlotView(QWidget):
             show=False,
         )
         self.canvas.native.setMinimumHeight(350)
+        self.canvas.native.installEventFilter(self)
         self.canvas.events.mouse_press.connect(self._pause_auto_fit)
         self.canvas.events.mouse_wheel.connect(self._pause_auto_fit)
         self.canvas.events.mouse_double_click.connect(self._restore_auto_fit)
@@ -31,6 +40,8 @@ class PlotView(QWidget):
         self._active_plot = None
         self._auto_fit = True
         self._latest_camera_range = None
+        self._all_channel_x_bounds = None
+        self._all_channel_y_bounds = []
 
         self.grid = self.canvas.central_widget.add_grid(
             margin=10,
@@ -100,10 +111,22 @@ class PlotView(QWidget):
         )
         self.channel_labels.visible = False
 
+        self.channel_scrollbar = QScrollBar(Qt.Orientation.Vertical)
+        self.channel_scrollbar.valueChanged.connect(
+            self._update_all_channel_camera
+        )
+        self.channel_scrollbar.hide()
+
+        plot_layout = QHBoxLayout()
+        plot_layout.setContentsMargins(0, 0, 0, 0)
+        plot_layout.setSpacing(0)
+        plot_layout.addWidget(self.canvas.native, stretch=1)
+        plot_layout.addWidget(self.channel_scrollbar)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.title_label)
-        layout.addWidget(self.canvas.native, stretch=1)
+        layout.addLayout(plot_layout, stretch=1)
 
     def update_signal(
         self,
@@ -142,6 +165,7 @@ class PlotView(QWidget):
             connect="strip",
         )
         self.channel_labels.visible = False
+        self.channel_scrollbar.hide()
 
         self.title_label.setText(f"Channel {channel_number} - {mode}")
 
@@ -155,12 +179,41 @@ class PlotView(QWidget):
             connect="strip",
         )
         self.channel_labels.visible = False
+        self.channel_scrollbar.hide()
         self._active_plot = None
         self._auto_fit = True
         self._latest_camera_range = None
+        self._all_channel_x_bounds = None
+        self._all_channel_y_bounds = []
 
         self.title_label.setText("Waiting for signal data")
         self.canvas.update()
+
+    def eventFilter(self, watched, event) -> bool:
+        """Use the mouse wheel to scroll channels in the all-channel view."""
+        is_all_channel_wheel = (
+            watched is self.canvas.native
+            and event.type() == QEvent.Type.Wheel
+            and self._active_plot is not None
+            and self._active_plot[0] == "all"
+        )
+
+        if not is_all_channel_wheel:
+            return super().eventFilter(watched, event)
+
+        wheel_delta = event.angleDelta().y()
+
+        if wheel_delta == 0:
+            wheel_delta = event.pixelDelta().y()
+
+        if wheel_delta != 0:
+            direction = -1 if wheel_delta > 0 else 1
+            self.channel_scrollbar.setValue(
+                self.channel_scrollbar.value() + direction
+            )
+
+        event.accept()
+        return True
 
     def _activate_plot(self, plot_key: tuple[str, int, str]) -> None:
         """Restore auto-fit when the displayed channel or mode changes."""
@@ -268,19 +321,25 @@ class PlotView(QWidget):
 
         offset_step = channel_range * 1.5
         signal_midpoint = (signal_min + signal_max) / 2
+        channel_count = data.shape[0]
+        channel_offsets = (
+            np.arange(channel_count - 1, -1, -1) * offset_step
+        )
 
         combined_positions = []
         combined_connect = []
+        channel_bounds = []
 
-        for channel_index in range(data.shape[0]):
+        for channel_index in range(channel_count):
             y = data[channel_index]
             valid_y = np.isfinite(y)
 
             if not np.any(valid_y):
+                channel_bounds.append(None)
                 continue
 
             channel_x = x[valid_y]
-            channel_y = y[valid_y] + channel_index * offset_step
+            channel_y = y[valid_y] + channel_offsets[channel_index]
 
             positions = np.column_stack((channel_x, channel_y)).astype(
                 np.float32,
@@ -288,6 +347,12 @@ class PlotView(QWidget):
             )
 
             combined_positions.append(positions)
+            channel_bounds.append(
+                (
+                    float(channel_y.min()),
+                    float(channel_y.max()),
+                )
+            )
 
             connect = np.ones(
                 len(positions),
@@ -314,8 +379,9 @@ class PlotView(QWidget):
             connect=connect,
         )
 
-        channel_count = data.shape[0]
-        self._activate_plot(("all", channel_count, mode))
+        plot_key = ("all", channel_count, mode)
+        plot_changed = plot_key != self._active_plot
+        self._activate_plot(plot_key)
 
         x_min = float(x.min())
         x_max = float(x.max())
@@ -328,7 +394,7 @@ class PlotView(QWidget):
         label_positions = np.column_stack(
             (
                 np.full(channel_count, label_x),
-                signal_midpoint + np.arange(channel_count) * offset_step,
+                signal_midpoint + channel_offsets,
             )
         )
         labels = [
@@ -344,16 +410,78 @@ class PlotView(QWidget):
 
         self.title_label.setText(f"All {channel_count} Channels - {mode}")
 
-        self._update_camera_range(
-            x_range=(
-                x_min - x_span * 0.18,
-                x_max,
-            ),
-            y_range=(
-                float(positions[:, 1].min()),
-                float(positions[:, 1].max()),
-            ),
-            margin=0.03,
+        self._all_channel_x_bounds = (
+            x_min - x_span * 0.18,
+            x_max,
         )
+        self._all_channel_y_bounds = channel_bounds
+
+        visible_channels = min(
+            self.VISIBLE_CHANNEL_COUNT,
+            channel_count,
+        )
+        maximum_start = max(0, channel_count - visible_channels)
+
+        self.channel_scrollbar.setRange(0, maximum_start)
+        self.channel_scrollbar.setPageStep(visible_channels)
+        self.channel_scrollbar.setSingleStep(1)
+        self.channel_scrollbar.setEnabled(maximum_start > 0)
+        self.channel_scrollbar.show()
+
+        if plot_changed:
+            self.channel_scrollbar.setValue(0)
+
+        self._update_all_channel_camera()
+
+        self.canvas.update()
+
+    def _update_all_channel_camera(self, value: int | None = None) -> None:
+        """Show one scrollable group while keeping every channel plotted."""
+        if (
+            self._all_channel_x_bounds is None
+            or not self._all_channel_y_bounds
+        ):
+            return
+
+        channel_count = len(self._all_channel_y_bounds)
+        visible_channels = min(
+            self.VISIBLE_CHANNEL_COUNT,
+            channel_count,
+        )
+        first_channel = self.channel_scrollbar.value()
+        last_channel = min(
+            first_channel + visible_channels,
+            channel_count,
+        )
+        visible_bounds = [
+            bounds
+            for bounds in self._all_channel_y_bounds[first_channel:last_channel]
+            if bounds is not None
+        ]
+
+        if not visible_bounds:
+            return
+
+        y_min = min(bounds[0] for bounds in visible_bounds)
+        y_max = max(bounds[1] for bounds in visible_bounds)
+        y_padding = max((y_max - y_min) * 0.03, 1.0)
+        y_range = (
+            y_min - y_padding,
+            y_max + y_padding,
+        )
+
+        self._update_camera_range(
+            x_range=self._all_channel_x_bounds,
+            y_range=y_range,
+            margin=0,
+        )
+
+        if value is not None and not self._auto_fit:
+            current_rect = self.view.camera.rect
+            self.view.camera.set_range(
+                x=(current_rect.left, current_rect.right),
+                y=y_range,
+                margin=0,
+            )
 
         self.canvas.update()
