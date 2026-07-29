@@ -48,6 +48,36 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
+If PowerShell reports that `Activate.ps1` cannot run because script execution
+is disabled, the virtual environment was still created successfully. This is a
+PowerShell execution-policy restriction, not an application error.
+
+Activation is optional. Install and run the project by calling the virtual
+environment's Python executable directly:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe TCP_Server\main.py
+```
+
+In a second PowerShell window, start the client with:
+
+```powershell
+.\.venv\Scripts\python.exe main.py
+```
+
+Alternatively, allow scripts only in the current PowerShell process and then
+activate the environment normally:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+The process-scoped policy change does not require administrator access and is
+discarded when that PowerShell window closes.
+
 ### Linux or macOS
 
 ```bash
